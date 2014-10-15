@@ -1,0 +1,179 @@
+{% extends "layout.html" %}
+{% block content %}
+<div><a href="/django-imports/">list</a></div>
+<div><a href="/django-imports/create/">new</a></div>
+<h2>Model: {{ model.name }}</h2>
+
+<select id="selectmod">
+  {% if model_list %}
+      {% for mod in model_list %}
+      <option value="{{mod.str}}"> {{ mod.str }} </option>
+      {% endfor %}
+  {% else %}
+      <option value="{{model.model_name}}"> {{ model.model_name }} </option>
+  {% endif %}
+</select>
+
+<button onClick="load()" >load</button>
+
+<form  action="/django-imports/push/{{pk}}" method="POST"> {% csrf_token %}
+
+{% if model_list %}
+<input type="text" name="description" placeholder="nom du nouveau model"></input>
+{% else %}
+<input type="text" name="description" placeholder="nom du nouveau model" value="{{model.name}}"></input>
+<input type="hidden" name="pk" value="{{model.pk}}"></input>
+{% endif %}
+
+<h3>Liste des champs:</h3>
+<div id="fields">
+  <!-- will contain the fidls list -->
+</div>
+<button>save</button>
+</form>
+
+<form action="/django-imports/extract/{{model.id}}" method="GET"> {% csrf_token %}
+<button>test extraction</button>
+</form>
+
+<form action="/django-imports/import/{{model.id}}/" method="POST" enctype="multipart/form-data"> {% csrf_token %}
+{{ fileform.file }}
+<!--<input type="file" name="file" />-->
+<button>test import</button>
+</form>
+
+
+<div class="errors">
+  {% for err in errors %}
+      <div><strong>{{ err.msg }}</strong> </br>&nbsp;&nbsp;&nbsp;&nbsp;original line: {{ err.line }}</div>
+  {% endfor %}
+</div>
+
+<!-- defines constants -->
+<script>
+  var models_data = {
+    {% if model_list %}
+      {% for mod in model_list %}
+        "{{mod.str|safe}}" :{
+             fields:[
+                {% for f in mod.fields %}
+                   {name:"{{f.name|safe}}",selected:false},
+                {% endfor %}
+             ] 
+         },
+       {% endfor %}
+    {% else %}
+  
+    {% endif %}
+  }
+
+  console.log("models:",models_data)
+</script>
+
+
+<!-- defines logics -->
+<script>
+    if ( typeof String.prototype.endsWith != 'function' ) {
+       String.prototype.endsWith = function( str ) {
+           return this.substring( this.length - str.length, this.length ) === str;
+       }
+    };
+
+
+  var arange_order = function(){
+      console.log("arange_order()");
+      var parent = document.getElementById("fields");
+      var child = parent.firstChild;
+      var i = 1;
+      while(child){
+          console.log(child,          child.childNodes);
+          for(var elem in child.childNodes){
+            console.log(child.childNodes[elem].name);
+            if(child.childNodes[elem].name && child.childNodes[elem].name.endsWith("_position")){
+                child.childNodes[5].value = i;
+                i++;
+            }
+          }
+          child = child.nextSibling;
+      }
+  }
+
+  var up = function(arg){
+      var div =  document.getElementById(arg),
+          parent = div.parentNode,
+          prev = div.previousSibling,
+          oldChild = parent.removeChild(div);
+      console.log("up()",div);
+      parent.insertBefore( oldChild, prev );
+
+      arange_order();
+  };
+
+  var down = function(arg){
+      console.log("down()",arg);
+      var div =  document.getElementById(arg),
+          parent = div.parentNode,
+          next = div.nextSibling.nextSibling,
+          oldChild = parent.removeChild(div);
+      console.log(parent);
+      parent.insertBefore( oldChild, next );
+
+      arange_order();
+  };
+
+  
+
+  //-- tool to load a model
+  var loadModel = function(mod){
+      console.log("loadModel()",mod)
+        //-- empty the field div
+      document.getElementById("fields").innerHTML = "<input type='hidden' name='plugged_model' value='"+mod.name+"'></input>";
+      //-- loads the fields
+      var i = 1;
+      for(var field_key in mod.fields ){
+          var field = mod.fields[field_key]
+          var my_checked = ""
+          if(field.selected == "True"){
+              my_checked = "checked";
+          }
+          document.getElementById("fields").innerHTML += 
+                  "<div style=\"width:100%;\" id='"+field.name+"'>"+
+                  "<div style=\"width:200px;float:left;\"  name='name'>"+field.name+"</div>"+
+                  "<input type='hidden' name='"+field.name+"_field_name' value='"+field.name+"'></input>"+
+                  "<input type='checkbox' name='"+field.name+"_selected' "+my_checked+"></input>"+
+                  "<input type='button' value='up' onClick='up(\""+field.name+"\")'></input>"+
+                  "<input type='button' value='down' onClick='down(\""+field.name+"\")'></input>"+
+                  "<input type='hidden' name='"+field.name+"_position' value='"+i+"'></input>"+
+                  "</div>"; 
+          i++;
+      }
+  };
+
+  //-- called when the load button is pressed
+  var load = function(e){
+      var mod_sel =  document.getElementById("selectmod");
+      var key = mod_sel.options[mod_sel.selectedIndex].text;
+      var mod = {
+         name   : key,
+         fields : models_data[key]["fields"]
+      };
+      loadModel(mod);
+  };
+</script>
+
+<!-- if we are viewing an existing model  -->
+<script>
+  {% if model %}
+  var current_model = {
+      name:"{{model.model_name|safe}}",
+      fields:[
+        {% for item in model_items %}
+            {name:"{{item.model_field}}",selected:"{{item.selected}}" },
+        {% endfor %}
+      ],
+  };
+  loadModel(current_model);  
+  {% endif %}
+</script>
+
+{% endblock %}

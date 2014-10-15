@@ -1,0 +1,9 @@
+{% extends "layout.html" %}
+{% block content %}
+<h2>Model list:</h2>
+{% for m in models %}
+<div> 
+  <a href="/django-imports/{{ m.id }}">{{ m.model_name }} {{ m.name }}</a>
+</div>
+{% endfor %}
+{% endblock %}
