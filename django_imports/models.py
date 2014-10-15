@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib import admin
 
+
 class ImportModel(models.Model):
     name = models.CharField(max_length=30)
     model_name = models.CharField(max_length=30)
