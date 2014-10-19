@@ -161,8 +161,8 @@ def run_extract(request,pk):
     for instance in data:
         for item in parametred_model_items:
             if item.selected == True:
-                out += "{};".format(instance[item.model_field])
-        out += "\n"
+                out += u"{};".format(instance[item.model_field])
+        out += u"\n"
 
     return HttpResponse(out, mimetype='application/text')
 
