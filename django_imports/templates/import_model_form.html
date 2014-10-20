@@ -57,7 +57,11 @@
         "{{mod.str|safe}}" :{
              fields:[
                 {% for f in mod.fields %}
-                   {name:"{{f.name|safe}}",selected:false},
+                   {name:"{{f.name|safe}}",
+                    is_related:{{f.is_related}},
+                    related_mod:"{{f.related_mod}}",
+                    selected:false,
+                    many:{{f.many}}},
                 {% endfor %}
              ] 
          },
@@ -121,7 +125,15 @@
       arange_order();
   };
 
-  
+
+  var getModel = function(key){
+      console.log("getModel()",key);
+      var mod = {
+          name   : key,
+          fields : models_data[key]["fields"]
+    };
+    return mod;
+  };
 
   //-- tool to load a model
   var loadModel = function(mod){
@@ -136,7 +148,8 @@
           if(field.selected == "True"){
               my_checked = "checked";
           }
-          document.getElementById("fields").innerHTML += 
+          if(!field.is_related){
+              document.getElementById("fields").innerHTML += 
                   "<div style=\"width:100%;\" id='"+field.name+"'>"+
                   "<div style=\"width:200px;float:left;\"  name='name'>"+field.name+"</div>"+
                   "<input type='hidden' name='"+field.name+"_field_name' value='"+field.name+"'></input>"+
@@ -145,6 +158,35 @@
                   "<input type='button' value='down' onClick='down(\""+field.name+"\")'></input>"+
                   "<input type='hidden' name='"+field.name+"_position' value='"+i+"'></input>"+
                   "</div>"; 
+          }else{
+              document.getElementById("fields").innerHTML += 
+              "<div style=\"width:100%;\" id='"+field.name+"'>" 
+
+              if(field.many){
+                  document.getElementById("fields").innerHTML += 
+                      "<div style=\"width:100%;background-color:#AAA;\">Many sub object!</div>"
+              }
+
+              var subMod = getModel(field.related_mod);
+
+              for(sub_field_key in subMod.fields){
+                  sub_field = subMod.fields[sub_field_key];
+                  console.log(sub_field);
+                  document.getElementById("fields").innerHTML += 
+                  "<div style=\"margin-left:20px;\">"+
+                  "<div style=\"width:200px;float:left;\"  name='name'>"+field.name+"."+sub_field.name+"</div>"+
+                  "<input type='hidden' name='"+field.name+"."+sub_field.name+"_field_name' value='"+field.name+"."+sub_field.name+"'></input>"+
+                  "<input type='checkbox' name='"+field.name+"."+sub_field.name+"_selected' "+my_checked+"></input>"+
+                  "<input type='button' value='up' onClick='up(\""+field.name+"."+sub_field.name+"\")'></input>"+
+                  "<input type='button' value='down' onClick='down(\""+field.name+"."+sub_field.name+"\")'></input>"+
+                  "<input type='hidden' name='"+field.name+"."+sub_field.name+"_position' value='"+i+"'></input>"+
+		  "</div>"
+              }
+    
+
+              document.getElementById("fields").innerHTML += 
+              "</div>"; 
+          }
           i++;
       }
   };
@@ -153,12 +195,10 @@
   var load = function(e){
       var mod_sel =  document.getElementById("selectmod");
       var key = mod_sel.options[mod_sel.selectedIndex].text;
-      var mod = {
-         name   : key,
-         fields : models_data[key]["fields"]
-      };
+      var mod = getModel(key);
       loadModel(mod);
   };
+  
 </script>
 
 <!-- if we are viewing an existing model  -->

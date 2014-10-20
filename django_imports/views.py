@@ -33,15 +33,37 @@ def get_model(fullname):
 def get_available_models():
     apps = settings.INSTALLED_APPS
     model_list = []
+    apps += ('auth',);
     for appname in apps:
         try:
             app = get_app(appname)
             for model in get_models(app):
                 #pprint(dir(model._meta))
                 #print("#####",model._meta.module_name,model._meta.object_name)
-                model_list.append({"str":"{mod}.{obj}".format(mod=appname,obj=str(model._meta.object_name)),
-                                   "class":model,
-                                   "fields":model._meta.fields})
+                mod = {"str":"{mod}.{obj}".format(mod=appname,obj=str(model._meta.object_name)),
+                       "class":model,
+                       "fields":[]}
+                for f in model._meta.fields:
+                    #if hasattr(f,'dir'):
+                        #print(dir(f))
+                    my_f = {}
+                    if f.rel != None  and hasattr(f.rel,'get_related_field'):
+                        #print(dir(f.rel.get_related_field()))
+                        print(f.rel.get_related_field().model)
+                        #for sub_f in f.rel.get_related_field():
+                        #    print(str(f)+"    "+str(f))
+                        print(dir(f.rel),f.rel.multiple)
+                        many = 'false'
+                        if f.rel.multiple:
+                            many = "true"
+                        my_f = {"name":f.name,
+                                "is_related":"true",
+                                'related_mod':"{mod}.{obj}".format(mod=f.rel.get_related_field().model._meta.app_label,obj=f.rel.get_related_field().model._meta.object_name),
+                                'many':many}
+                    else:
+                        my_f = {"name":f.name,"is_related":"false","related_mod":'null','many':'false'}
+                    mod["fields"].append(my_f)
+                model_list.append(mod)
         except ImproperlyConfigured as e:
             pass
     #pprint(model_list)
@@ -65,7 +87,7 @@ def import_model_form(request,pk=None,errs=None):
     else:
         model = ImportModel.objects.get(pk=pk)
         model_items = ImportModelItem.objects.filter(import_model=model).order_by('order')
-
+        
         c.update({'model':model,
                   'model_items':model_items})
     c.update(csrf(request))
@@ -139,7 +161,7 @@ def get_model_data(resquest,mod):
             'app':''}
     #-- get desired model data
     return HttpResponse(simplejson.dumps(data), mimetype='application/json')
-
+    
 
 
 #-- export
@@ -161,7 +183,19 @@ def run_extract(request,pk):
     for instance in data:
         for item in parametred_model_items:
             if item.selected == True:
-                out += u"{};".format(instance[item.model_field])
+                #-- is it a related field
+                if "." in item.model_field:
+                    path = item.model_field.split(".")
+                    if len(path)>2:
+                        raise Exception("not yet implemented")
+                    else:
+                        if instance[path[0]+"_id"] is None:
+                            out += u";"
+                        else:
+                            pprint(dir(instance))
+                            out += u"{};".format(instance[path[0]+"_id"].__dict__[path[1]])
+                else:
+                    out += u"{};".format(instance[item.model_field])
         out += u"\n"
 
     return HttpResponse(out, mimetype='application/text')
