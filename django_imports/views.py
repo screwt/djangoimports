@@ -192,13 +192,20 @@ def run_extract(request,pk):
                         if instance[path[0]+"_id"] is None:
                             out += u";"
                         else:
-                            pprint(dir(instance))
-                            out += u"{};".format(instance[path[0]+"_id"].__dict__[path[1]])
+                            #-- related object instance 
+                            subinstance = getattr(mod.objects.get(pk=instance['id']),path[0])
+                            #-- to do, optimse via storing the subinstance
+                            val = getattr(subinstance,path[1])
+                            if val is None:
+                                val = ""
+                            #submod = get_model(path[0])
+                            out += u"\"{}\";".format(val)
                 else:
-                    out += u"{};".format(instance[item.model_field])
+                    out += u"\"{}\";".format(instance[item.model_field])
         out += u"\n"
-
-    return HttpResponse(out, mimetype='application/text')
+        response = HttpResponse(out, mimetype='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="extract.csv"'
+    return response
 
 
 
@@ -218,25 +225,64 @@ def run_import(request,pk):
     line_number = 0
     errors = []
 
+    #-- retrive sub models if any
+    submodels = {}
+    submodel_seleted_index = 0
+    for field in parametred_model_items:
+        #print(field.model_field)
+        
+        if '.' in field.model_field:
+            path = field.model_field.split(".")
+            #pprint(path)
+            if path[0] not in submodels:
+                submodels.update({path[0]:{"fields":[],"model":""}})
+            submodels[path[0]]["fields"].append({path[1]:submodel_seleted_index})
+        if field.selected:
+            submodel_seleted_index+=1
+
+    #-- retrive sub model fullname
+    for k,v in submodels.items():
+        #print(k,v)
+        tmp_inst = mod.objects.first()
+        submod = getattr(tmp_inst,k)
+        #pprint(dir(submod._meta.model._meta))
+        str_model = "{app}.{mod}".format(mod=submod._meta.model_name,app=submod._meta.app_label)
+        submodels[k]["model"] = str_model
+        #print(submod,mod)
+        
+
+    pprint(submodels)
+
+
     #-- read the file
     for line in my_file:
         line_number += 1
         #print(line[:-1])
         fields = line[:-1].split(";")
         #pprint(fields)
-        tmp_dict = {}
+
         i = 0
         
         
         try :
             #-- verif format
             if len(fields) != len(parametred_model_items):
-                raise Exception("Column number should be {}, your file contains {} columns see line {}".format(len(parametred_model_items),len(fields),line_number))
+                raise Exception("Column number should be {}, your file contains {} columns, see line {}".format(len(parametred_model_items),len(fields),line_number))
         
+            tmp_dict = {}
+            for k,v in submodels.items():
+                submod = get_model(v["model"])
+                for f in v["fields"]:
+                    print(f)
+                    #tmp_dict.update({f.key:f.)
+                
+            tmp_dict = {}
             for field in fields:
-                tmp_dict.update({parametred_model_items[i].model_field:field})
+                if "." not in parametred_model_items[i].model_field:
+                    tmp_dict.update({parametred_model_items[i].model_field:field})
                 i+=1
-                pprint(tmp_dict)
+            
+            #pprint(tmp_dict)
 
             #-- check if the instance already exists
 
@@ -246,7 +292,7 @@ def run_import(request,pk):
             #-- save or update it
             o.save()
         except Exception as e:
-            print("Error",e)
+            #print("Error",e)
             errors.append({'msg':e,'line':line,'linenumber':line_number})
     c = {'errors':errors,'pk':pk}
     return render_to_response('import_model_report.html',c)

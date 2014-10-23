@@ -15,7 +15,6 @@
 </select>
 
 <button onClick="load()" >load</button>
-
 <form  action="/django-imports/push/{{pk}}" method="POST"> {% csrf_token %}
 
 {% if model_list %}
