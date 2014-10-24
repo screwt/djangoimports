@@ -14,7 +14,10 @@
   {% endif %}
 </select>
 
+{% if model_list %}
 <button onClick="load()" >load</button>
+{% endif %}
+
 <form  action="/django-imports/push/{{pk}}" method="POST"> {% csrf_token %}
 
 {% if model_list %}
@@ -28,19 +31,28 @@
 <div id="fields">
   <!-- will contain the fidls list -->
 </div>
+
+<div id="mainSelectValidator">
+</div>
+
+<br/>
 <button>save</button>
 </form>
+
+<hr/>
+
+{% if not model_list %}
 
 <form action="/django-imports/extract/{{model.id}}" method="GET"> {% csrf_token %}
 <button>test extraction</button>
 </form>
-
+<br/>
 <form action="/django-imports/import/{{model.id}}/" method="POST" enctype="multipart/form-data"> {% csrf_token %}
-{{ fileform.file }}
+{{ fileform.file }}<br/>
 <!--<input type="file" name="file" />-->
 <button>test import</button>
 </form>
-
+{% endif %}
 
 <div class="errors">
   {% for err in errors %}
@@ -62,7 +74,12 @@
                     selected:false,
                     many:{{f.many}}},
                 {% endfor %}
-             ] 
+             ],
+             validators:[
+                {% for v in mod.validators %}
+                   "{{v}}",
+                {% endfor %}
+             ]
          },
        {% endfor %}
     {% else %}
@@ -129,7 +146,8 @@
       console.log("getModel()",key);
       var mod = {
           name   : key,
-          fields : models_data[key]["fields"]
+          fields : models_data[key]["fields"],
+          validators : models_data[key]["validators"],
     };
     return mod;
   };
@@ -190,12 +208,48 @@
       }
   };
 
+  //-- util
+  var getValidableModels = function(mod){
+      list = [];
+      list.push(mod);
+      for(var k in mod.fields){
+          var field = mod.fields[k];
+          console.log("getValidableModels()",field);
+          if(field.related_mod!="" && field.related_mod!=undefined && field.related_mod!="null")
+             list.push(getModel(field.related_mod));
+      }
+      return list;
+  }
+
   //-- called when the load button is pressed
   var load = function(e){
       var mod_sel =  document.getElementById("selectmod");
       var key = mod_sel.options[mod_sel.selectedIndex].text;
       var mod = getModel(key);
       loadModel(mod);
+
+      //-- loads validator selection
+      var string_out = "";
+      string_out = "<h3>select validators</h3>"
+      var validablemodels = getValidableModels(mod);
+      console.log("validablemodels",validablemodels)
+      for(var key in validablemodels){
+          var vmod = validablemodels[key];
+          if(vmod.validators.length>0){
+              string_out +=
+              "<spann style=\"width:200px;display:inline-block;\">Model "+vmod.name+" : </spann>"+
+              "<select id=selectval-"+vmod.name+">"+
+                  "<option value=\"\">No validation</option>"
+              for(var subkey in vmod.validators){
+                   var validator = vmod.validators[subkey];
+                   string_out +=
+                   "<option value="+validator+">"+validator+"</option>"
+              }
+              string_out +=
+              "</select> <br/>"
+          }
+      }   
+      document.getElementById("mainSelectValidator").innerHTML = string_out;
   };
   
 </script>

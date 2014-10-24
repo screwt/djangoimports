@@ -10,7 +10,6 @@ from django.core.exceptions import ImproperlyConfigured
 from django.core.context_processors import csrf
 from django import forms
 
-
 class UploadFileForm(forms.Form):
     file = forms.FileField()
 
@@ -42,6 +41,7 @@ def get_available_models():
                 #print("#####",model._meta.module_name,model._meta.object_name)
                 mod = {"str":"{mod}.{obj}".format(mod=appname,obj=str(model._meta.object_name)),
                        "class":model,
+                       "validators": getValidators("{}.{}".format(appname,model._meta.object_name)),
                        "fields":[]}
                 for f in model._meta.fields:
                     #if hasattr(f,'dir'):
@@ -52,7 +52,7 @@ def get_available_models():
                         print(f.rel.get_related_field().model)
                         #for sub_f in f.rel.get_related_field():
                         #    print(str(f)+"    "+str(f))
-                        print(dir(f.rel),f.rel.multiple)
+                        #print(dir(f.rel),f.rel.multiple)
                         many = 'false'
                         if f.rel.multiple:
                             many = "true"
@@ -93,6 +93,24 @@ def import_model_form(request,pk=None,errs=None):
     c.update(csrf(request))
     pprint(c)
     return render_to_response('import_model_form.html',c)
+
+#-- retrive the validator list from a app_name.model string
+def getValidators(mod):
+    appname = mod.split(".")[:-1]
+    appname = "".join(appname)
+    modelname = mod.split(".")[-1:]
+    modelname = "".join(modelname)
+    from django_imports.apps import di_site 
+    print("getValidators()",mod,di_site.registry)
+    try :
+        return di_site.registry[mod]
+    except KeyError as e:
+        return []
+#app = get_app(appname)
+    
+    #print(appname,modelname,di_site.registry)
+    
+
 
 def import_model_push(request,pk=None):
     print("import_model_push",pk)
@@ -253,13 +271,11 @@ def run_import(request,pk):
 
     pprint(submodels)
 
-
+    logs = []
     #-- read the file
     for line in my_file:
         line_number += 1
-        #print(line[:-1])
-        fields = line[:-1].split(";")
-        #pprint(fields)
+        fields = line[:-1].decode('utf8').split(";")
 
         i = 0
         
@@ -268,31 +284,43 @@ def run_import(request,pk):
             #-- verif format
             if len(fields) != len(parametred_model_items):
                 raise Exception("Column number should be {}, your file contains {} columns, see line {}".format(len(parametred_model_items),len(fields),line_number))
-        
+
+            #-- create sub models
+            subobs = {}
             tmp_dict = {}
             for k,v in submodels.items():
                 submod = get_model(v["model"])
                 for f in v["fields"]:
-                    print(f)
-                    #tmp_dict.update({f.key:f.)
+                    subkey,subval = f.items()[0]
+                    tmp_dict.update({subkey:fields[subval]})
+                subo = submod.objects.create(**tmp_dict)
+                subo.save()
+                subobs.update({k+"_id":subo.id})
+                logs.append("created {} with id {}".format(str(submod),subo.id))
                 
+                
+            #-- create model
             tmp_dict = {}
             for field in fields:
                 if "." not in parametred_model_items[i].model_field:
                     tmp_dict.update({parametred_model_items[i].model_field:field})
                 i+=1
+                
             
-            #pprint(tmp_dict)
-
-            #-- check if the instance already exists
-
+            #pprint(subobs)
+            #-- link sub objects
+            pprint(tmp_dict)
+            tmp_dict.update(subobs)
+            pprint(tmp_dict)
 
             o = mod.objects.create(**tmp_dict)
-
-            #-- save or update it
             o.save()
+            logs.append("created {} with id {}".format(str(mod),o.id))
+
+
         except Exception as e:
             #print("Error",e)
+            #raise e
             errors.append({'msg':e,'line':line,'linenumber':line_number})
-    c = {'errors':errors,'pk':pk}
+    c = {'errors':errors,'pk':pk,"logs":logs}
     return render_to_response('import_model_report.html',c)
